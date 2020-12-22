@@ -56,9 +56,10 @@ def on_message(ws, message):
         print(closes)
         if len(closes) > RSI_PERIOD:
             macd, sig, hist = talib.MACDFIX(closes)
-
-            print(f'MACD: {type(macd)}')
+            print(f'MACD: {macd}')
             np_closes = numpy.array(closes)
+            macd, sig, hist = talib.MACDFIX(np_closes)
+            print(f'MACD: {macd}')
             rsi = talib.RSI(np_closes, RSI_PERIOD)
             print("all rsis calculated so far")
             print(rsi)
