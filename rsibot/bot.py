@@ -1,4 +1,4 @@
-import websocket, json, pprint, talib, numpy, pandas
+import websocket, json, pprint, talib, numpy, pandas, threading
 import config
 from binance.client import Client
 from binance.enums import *
@@ -24,6 +24,24 @@ def get_ema(series, period):
     return pandas.ewma(series, span=period)[-1]
 
 
+def test_order(side, close):
+    global test_cash, eth_owned
+    if side == 'buy':
+        if test_cash > 0:
+            eth_owned = eth_owned + test_cash / close
+            print(f"ETH is oversold, bought {test_cash / close} at {close}")
+            test_cash = 0
+        else:
+            print("ETH is oversold, but we don't have any money to buy")
+    if side == 'sell':
+        if eth_owned > 0:
+            test_cash = test_cash + eth_owned * close
+            print(f"ETH is overbought, sold {eth_owned} for {close}")
+            eth_owned = 0
+        else:
+            print("ETH is overbought, but we don't have any to sell")
+
+
 def order(side, quantity, symbol, order_type=ORDER_TYPE_MARKET):
     try:
         print("sending order")
@@ -45,7 +63,7 @@ def on_close(ws):
 
 
 def on_message(ws, message):
-    global closes, in_position, ticks, ema_list, eth_owned, test_cash
+    global closes, in_position, ticks, eth_owned, test_cash
     print('received message')
     json_message = json.loads(message)
     pprint.pprint(json_message['k']['x'])
@@ -71,15 +89,9 @@ def on_message(ws, message):
             print(rsi)
             last_rsi = rsi[-1]
             print(f'The current rsi is {last_rsi}')
-
             if last_rsi > RSI_OVERBOUGHT:
+                threading.Thread(target=test_order, args=('sell', close)).start()
 
-                if eth_owned > 0:
-                    test_cash = test_cash + eth_owned * close
-                    print(f"ETH is overbought, sold {eth_owned} for {close}")
-                    eth_owned = 0
-                else:
-                    print("ETH is overbought, but we don't have any to sell")
                 # if in_position:
                 #     print("Overbought! Sell! Sell! Sell!")
                 #     # put binance sell logic here
@@ -88,14 +100,8 @@ def on_message(ws, message):
                 #         in_position = False
                 # else:
                 #     print("It is overbought, but we don't own any. Nothing to do.")
-
             if last_rsi < RSI_OVERSOLD:
-                if test_cash > 0:
-                    eth_owned = eth_owned + test_cash / close
-                    print(f"ETH is oversold, bought {test_cash / close} at {close}")
-                    test_cash = 0
-                else:
-                    print("ETH is oversold, but we don't have any money to buy")
+                threading.Thread(target=test_order, args=('buy', close)).start()
                 # if in_position:
                 #     print("It is oversold, but you already own it, nothing to do.")
                 # else:
@@ -104,7 +110,6 @@ def on_message(ws, message):
                 #     order_succeeded = order(SIDE_BUY, TRADE_QUANTITY, TRADE_SYMBOL)
                 #     if order_succeeded:
                 #         in_position = True
-
 
 
 ws = websocket.WebSocketApp(SOCKET, on_open=on_open, on_close=on_close, on_message=on_message)
