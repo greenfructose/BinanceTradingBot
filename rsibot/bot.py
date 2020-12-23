@@ -1,4 +1,4 @@
-import websocket, json, pprint, talib, numpy
+import websocket, json, pprint, talib, numpy, pandas
 import config
 from binance.client import Client
 from binance.enums import *
@@ -13,12 +13,19 @@ MACD_OVERSOLD = 0
 TRADE_SYMBOL = 'ETHUSD'
 TRADE_QUANTITY = 0.05
 
+test_cash = 1000.0
+eth_owned = 0.0
 ema_list = []
 closes = []
 ticks = 0
 in_position = False
 
 client = Client(config.API_KEY, config.API_SECRET, tld='us')
+
+
+def get_ema(series, period):
+    series = numpy.array(series)
+    return pandas.ewma(series, span=period)[-1]
 
 
 def order(side, quantity, symbol, order_type=ORDER_TYPE_MARKET):
@@ -42,7 +49,7 @@ def on_close(ws):
 
 
 def on_message(ws, message):
-    global closes, in_position, ticks, ema_list
+    global closes, in_position, ticks, ema_list, eth_owned, test_cash
     print('received message')
     json_message = json.loads(message)
     pprint.pprint(json_message['k']['x'])
@@ -58,42 +65,61 @@ def on_message(ws, message):
         ticks = 0
         print("candle closed at {}".format(close))
         closes.append(float(close))
-        print("closes")
-        print(closes)
-        if len(closes) > 26:
+        print(f'Current Cash Balance: ${test_cash}')
+        print(f'Current ETH Balance: {eth_owned} ETH')
+        print(f'Current Portfolio Cash Value: ${test_cash + eth_owned * closes[-1]}')
+        if len(closes) > 5:
             np_closes = numpy.array(closes)
-            short_ema = talib.EMA(closes, 12)
-            long_ema = talib.EMA(closes, 26)
+            short_ema = get_ema(closes, 2)
+            print(f'Short EMA: {short_ema}')
+            long_ema = get_ema(closes, 5)
+            print(f'Long EMA: {long_ema}')
             macd_prev = long_ema - short_ema
             ema_list.append(macd_prev)
             if len(ema_list) > 8:
-                macd = talib.EMA(ema_list, 9)
+                macd = get_ema(ema_list, 9)
                 print(f'MACD: {macd}')
                 rsi = talib.RSI(np_closes, RSI_PERIOD)
                 print("all rsis calculated so far")
                 print(rsi)
                 last_rsi = rsi[-1]
-                print("the current rsi is {}".format(last_rsi))
+                print(f'The current rsi is {last_rsi}')
+                print(f'The current MACD is {ema_list[-1]}')
+                print(f'The current MACD signal is {macd}')
 
                 if last_rsi > RSI_OVERBOUGHT:
-                    if in_position:
-                        print("Overbought! Sell! Sell! Sell!")
-                        # put binance sell logic here
-                        order_succeeded = order(SIDE_SELL, TRADE_QUANTITY, TRADE_SYMBOL)
-                        if order_succeeded:
-                            in_position = False
+
+                    if eth_owned > 0:
+                        test_cash = test_cash + eth_owned * close
+                        print(f"ETH is overbought, sold {eth_owned} for {close}")
+                        eth_owned = 0
                     else:
-                        print("It is overbought, but we don't own any. Nothing to do.")
+                        print("ETH is overbought, but we don't have any to sell")
+                    # if in_position:
+                    #     print("Overbought! Sell! Sell! Sell!")
+                    #     # put binance sell logic here
+                    #     order_succeeded = order(SIDE_SELL, TRADE_QUANTITY, TRADE_SYMBOL)
+                    #     if order_succeeded:
+                    #         in_position = False
+                    # else:
+                    #     print("It is overbought, but we don't own any. Nothing to do.")
 
                 if last_rsi < RSI_OVERSOLD:
-                    if in_position:
-                        print("It is oversold, but you already own it, nothing to do.")
+                    if test_cash > 0:
+                        eth_owned = eth_owned + test_cash / close
+                        print(f"ETH is oversold, bought {test_cash / close} at {close}")
+                        test_cash = 0
                     else:
-                        print("Oversold! Buy! Buy! Buy!")
-                        # put binance buy order logic here
-                        order_succeeded = order(SIDE_BUY, TRADE_QUANTITY, TRADE_SYMBOL)
-                        if order_succeeded:
-                            in_position = True
+                        print("ETH is oversold, but we don't have any money to buy")
+                    # if in_position:
+                    #     print("It is oversold, but you already own it, nothing to do.")
+                    # else:
+                    #     print("Oversold! Buy! Buy! Buy!")
+                    #     # put binance buy order logic here
+                    #     order_succeeded = order(SIDE_BUY, TRADE_QUANTITY, TRADE_SYMBOL)
+                    #     if order_succeeded:
+                    #         in_position = True
+
 
 
 ws = websocket.WebSocketApp(SOCKET, on_open=on_open, on_close=on_close, on_message=on_message)
