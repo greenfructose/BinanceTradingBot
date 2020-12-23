@@ -7,15 +7,11 @@ SOCKET = "wss://stream.binance.com:9443/ws/ethusdt@kline_1m"
 RSI_PERIOD = 14
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
-MACD_SIGNAL = 9
-MACD_OVERBOUGHT = 0
-MACD_OVERSOLD = 0
 TRADE_SYMBOL = 'ETHUSD'
 TRADE_QUANTITY = 0.05
 
 test_cash = 1000.0
 eth_owned = 0.0
-ema_list = []
 closes = []
 ticks = 0
 in_position = False
@@ -68,57 +64,46 @@ def on_message(ws, message):
         print(f'Current Cash Balance: ${test_cash}')
         print(f'Current ETH Balance: {eth_owned} ETH')
         print(f'Current Portfolio Cash Value: ${test_cash + eth_owned * closes[-1]}')
-        if len(closes) > 5:
+        if len(closes) > RSI_PERIOD:
             np_closes = numpy.array(closes)
-            short_ema = get_ema(closes, 2)
-            print(f'Short EMA: {short_ema}')
-            long_ema = get_ema(closes, 5)
-            print(f'Long EMA: {long_ema}')
-            macd_prev = long_ema - short_ema
-            ema_list.append(macd_prev)
-            if len(ema_list) > 8:
-                macd = get_ema(ema_list, 9)
-                print(f'MACD: {macd}')
-                rsi = talib.RSI(np_closes, RSI_PERIOD)
-                print("all rsis calculated so far")
-                print(rsi)
-                last_rsi = rsi[-1]
-                print(f'The current rsi is {last_rsi}')
-                print(f'The current MACD is {ema_list[-1]}')
-                print(f'The current MACD signal is {macd}')
+            rsi = talib.RSI(np_closes, RSI_PERIOD)
+            print("all rsis calculated so far")
+            print(rsi)
+            last_rsi = rsi[-1]
+            print(f'The current rsi is {last_rsi}')
 
-                if last_rsi > RSI_OVERBOUGHT:
+            if last_rsi > RSI_OVERBOUGHT:
 
-                    if eth_owned > 0:
-                        test_cash = test_cash + eth_owned * close
-                        print(f"ETH is overbought, sold {eth_owned} for {close}")
-                        eth_owned = 0
-                    else:
-                        print("ETH is overbought, but we don't have any to sell")
-                    # if in_position:
-                    #     print("Overbought! Sell! Sell! Sell!")
-                    #     # put binance sell logic here
-                    #     order_succeeded = order(SIDE_SELL, TRADE_QUANTITY, TRADE_SYMBOL)
-                    #     if order_succeeded:
-                    #         in_position = False
-                    # else:
-                    #     print("It is overbought, but we don't own any. Nothing to do.")
+                if eth_owned > 0:
+                    test_cash = test_cash + eth_owned * close
+                    print(f"ETH is overbought, sold {eth_owned} for {close}")
+                    eth_owned = 0
+                else:
+                    print("ETH is overbought, but we don't have any to sell")
+                # if in_position:
+                #     print("Overbought! Sell! Sell! Sell!")
+                #     # put binance sell logic here
+                #     order_succeeded = order(SIDE_SELL, TRADE_QUANTITY, TRADE_SYMBOL)
+                #     if order_succeeded:
+                #         in_position = False
+                # else:
+                #     print("It is overbought, but we don't own any. Nothing to do.")
 
-                if last_rsi < RSI_OVERSOLD:
-                    if test_cash > 0:
-                        eth_owned = eth_owned + test_cash / close
-                        print(f"ETH is oversold, bought {test_cash / close} at {close}")
-                        test_cash = 0
-                    else:
-                        print("ETH is oversold, but we don't have any money to buy")
-                    # if in_position:
-                    #     print("It is oversold, but you already own it, nothing to do.")
-                    # else:
-                    #     print("Oversold! Buy! Buy! Buy!")
-                    #     # put binance buy order logic here
-                    #     order_succeeded = order(SIDE_BUY, TRADE_QUANTITY, TRADE_SYMBOL)
-                    #     if order_succeeded:
-                    #         in_position = True
+            if last_rsi < RSI_OVERSOLD:
+                if test_cash > 0:
+                    eth_owned = eth_owned + test_cash / close
+                    print(f"ETH is oversold, bought {test_cash / close} at {close}")
+                    test_cash = 0
+                else:
+                    print("ETH is oversold, but we don't have any money to buy")
+                # if in_position:
+                #     print("It is oversold, but you already own it, nothing to do.")
+                # else:
+                #     print("Oversold! Buy! Buy! Buy!")
+                #     # put binance buy order logic here
+                #     order_succeeded = order(SIDE_BUY, TRADE_QUANTITY, TRADE_SYMBOL)
+                #     if order_succeeded:
+                #         in_position = True
 
 
 
